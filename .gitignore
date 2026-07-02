@@ -5,6 +5,8 @@ coverage/
 .env.local
 .DS_Store
 npm-debug.log*
+.dev-logs/
+.tmp-chrome-*/
 *.tsbuildinfo
 .eslintcache
 backend/generated/

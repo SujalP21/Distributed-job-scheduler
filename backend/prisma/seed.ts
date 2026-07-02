@@ -36,15 +36,16 @@ async function main() {
   });
 
   const organization = await prisma.organization.upsert({
-    where: { slug: "acme-platform" },
+    where: { id: "seed_org_acme" },
     update: {
-      name: "Acme Platform",
+      name: "Acme Payments",
+      slug: "acme-payments",
       deletedAt: null
     },
     create: {
       id: "seed_org_acme",
-      name: "Acme Platform",
-      slug: "acme-platform"
+      name: "Acme Payments",
+      slug: "acme-payments"
     }
   });
 
@@ -67,14 +68,11 @@ async function main() {
   });
 
   const project = await prisma.project.upsert({
-    where: {
-      organizationId_slug: {
-        organizationId: organization.id,
-        slug: "payments"
-      }
-    },
+    where: { id: "seed_project_payments" },
     update: {
-      name: "Payments Platform",
+      organizationId: organization.id,
+      name: "Payment Platform",
+      slug: "payment-platform",
       status: "ACTIVE",
       deletedAt: null
     },
@@ -82,8 +80,8 @@ async function main() {
       id: "seed_project_payments",
       organizationId: organization.id,
       createdById: user.id,
-      name: "Payments Platform",
-      slug: "payments",
+      name: "Payment Platform",
+      slug: "payment-platform",
       description: "Demo project for payment workflow background jobs"
     }
   });
@@ -140,13 +138,11 @@ async function main() {
   });
 
   const defaultQueue = await prisma.queue.upsert({
-    where: {
-      projectId_slug: {
-        projectId: project.id,
-        slug: "default"
-      }
-    },
+    where: { id: "seed_queue_default" },
     update: {
+      projectId: project.id,
+      name: "Email Queue",
+      slug: "email-queue",
       status: QueueStatus.ACTIVE,
       retryPolicyId: retryFast.id,
       concurrencyLimit: 10,
@@ -157,21 +153,19 @@ async function main() {
       id: "seed_queue_default",
       projectId: project.id,
       retryPolicyId: retryFast.id,
-      name: "Default Jobs",
-      slug: "default",
+      name: "Email Queue",
+      slug: "email-queue",
       concurrencyLimit: 10,
       priorityWeight: 50
     }
   });
 
   const criticalQueue = await prisma.queue.upsert({
-    where: {
-      projectId_slug: {
-        projectId: project.id,
-        slug: "critical"
-      }
-    },
+    where: { id: "seed_queue_critical" },
     update: {
+      projectId: project.id,
+      name: "Critical Payments",
+      slug: "critical-payments",
       status: QueueStatus.ACTIVE,
       retryPolicyId: retryFixed.id,
       concurrencyLimit: 4,
@@ -183,7 +177,7 @@ async function main() {
       projectId: project.id,
       retryPolicyId: retryFixed.id,
       name: "Critical Payments",
-      slug: "critical",
+      slug: "critical-payments",
       concurrencyLimit: 4,
       priorityWeight: 100
     }
@@ -192,6 +186,7 @@ async function main() {
   const worker = await prisma.worker.upsert({
     where: { id: "seed_worker_1" },
     update: {
+      name: "payments-worker-01",
       status: WorkerStatus.ONLINE,
       lastHeartbeatAt: minutesAgo(1),
       concurrency: 8
@@ -200,7 +195,7 @@ async function main() {
       id: "seed_worker_1",
       projectId: project.id,
       queueId: defaultQueue.id,
-      name: "payments-worker-1",
+      name: "payments-worker-01",
       hostname: "worker-a.local",
       status: WorkerStatus.ONLINE,
       concurrency: 8,
@@ -241,7 +236,12 @@ async function main() {
       type: JobType.IMMEDIATE,
       state: JobState.QUEUED,
       priority: 50,
-      payload: { task: "send-receipt", paymentId: "pay_1001" },
+      payload: {
+        jobName: "Send Invoice Email",
+        task: "send-invoice-email",
+        invoiceId: "INV-2026-0715",
+        recipient: "billing@acmepayments.com"
+      },
       availableAt: minutesAgo(2)
     },
     {

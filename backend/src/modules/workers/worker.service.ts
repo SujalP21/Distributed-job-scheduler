@@ -59,7 +59,11 @@ export class WorkerService {
     });
   }
 
-  registerWorker(input: RegisterWorkerInput) {
+  async registerWorker(input: RegisterWorkerInput) {
+    if (input.queueId) {
+      await this.ensureQueueBelongsToProject(input.queueId, input.projectId);
+    }
+
     logger.info("worker_registering", {
       worker: {
         projectId: input.projectId,
@@ -410,6 +414,22 @@ export class WorkerService {
 
       return result;
     });
+  }
+
+  private async ensureQueueBelongsToProject(queueId: string, projectId: string) {
+    const queue = await this.db.queue.findUnique({
+      where: { id: queueId }
+    });
+
+    if (!queue || queue.deletedAt) {
+      throw new AppError(404, "QUEUE_NOT_FOUND", "Queue was not found");
+    }
+
+    if (queue.projectId !== projectId) {
+      throw new AppError(400, "QUEUE_PROJECT_MISMATCH", "Queue does not belong to the project");
+    }
+
+    return queue;
   }
 }
 

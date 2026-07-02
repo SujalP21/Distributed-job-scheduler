@@ -1,46 +1,98 @@
-# API Documentation
+# API Reference
 
-Base URL: `http://localhost:4000`
+Local base URL: `http://localhost:4000`
 
-Responses use JSON and structured errors:
+The API accepts and returns JSON except for `GET /metrics`, which returns
+Prometheus text format. Request bodies are validated with Zod. Validation and
+domain failures use a consistent error envelope:
 
 ```json
 {
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
-  }
+    "message": "Request validation failed",
+    "details": []
+  },
+  "requestId": "b1345548-7c70-4fb8-a088-41bdc89430a2"
 }
 ```
 
-## Health And Metrics
-
-- `GET /health` - API, Postgres, Redis, and worker health
-- `GET /metrics` - Prometheus text metrics
-- `GET /metrics/overview` - dashboard JSON metrics
+Clients may send `x-request-id` and `x-correlation-id`. The server generates
+missing values and returns them in response headers.
 
 ## Authentication
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
+### Register
 
-Register body:
+`POST /api/auth/register`
 
 ```json
 {
-  "email": "admin@example.com",
-  "name": "Admin User",
+  "email": "admin@acmepayments.dev",
+  "name": "Acme Administrator",
   "password": "Password123",
-  "organizationName": "Acme Platform"
+  "organizationName": "Acme Payments"
+}
+```
+
+Creates the user, organization, owner membership, access token, and refresh
+token.
+
+### Login
+
+`POST /api/auth/login`
+
+```json
+{
+  "email": "admin@scheduler.dev",
+  "password": "Password123"
+}
+```
+
+### Refresh
+
+`POST /api/auth/refresh`
+
+```json
+{
+  "refreshToken": "<refresh-token>"
+}
+```
+
+Refresh tokens rotate on use. Reusing a revoked token is rejected.
+
+### Logout and current user
+
+- `POST /api/auth/logout` with `{ "refreshToken": "..." }`
+- `GET /api/auth/me` with `Authorization: Bearer <access-token>`
+
+The seed credential is intended for local review only.
+
+## Organizations
+
+- `GET /api/organizations`
+- `POST /api/organizations`
+
+```json
+{
+  "name": "Acme Payments",
+  "slug": "acme-payments"
 }
 ```
 
 ## Projects
 
-- `GET /api/projects` - list active projects with counts
+- `GET /api/projects`
+- `POST /api/projects`
+
+```json
+{
+  "organizationId": "organization_id",
+  "name": "Payment Platform",
+  "slug": "payment-platform",
+  "description": "Payment processing background workloads"
+}
+```
 
 ## Queues
 
@@ -52,17 +104,21 @@ Register body:
 - `DELETE /api/queues/:queueId`
 - `GET /api/queues/:queueId/statistics`
 
-Create queue body:
+Create queue:
 
 ```json
 {
   "projectId": "project_id",
-  "name": "Critical Jobs",
-  "slug": "critical",
+  "name": "Critical Payments",
+  "slug": "critical-payments",
   "concurrencyLimit": 10,
-  "priorityWeight": 100
+  "priorityWeight": 100,
+  "retryPolicyId": "retry_policy_id"
 }
 ```
+
+Queue deletion is a soft archive. Archived queues are excluded from worker
+polling.
 
 ## Jobs
 
@@ -77,44 +133,28 @@ Create queue body:
 - `POST /api/jobs/:jobId/retry`
 - `GET /api/jobs/:jobId/history`
 
-Immediate job body:
+Immediate job:
 
 ```json
 {
   "projectId": "project_id",
   "queueId": "queue_id",
-  "priority": 50,
+  "priority": 80,
   "payload": {
-    "task": "send-email",
-    "recipient": "user@example.com"
+    "jobName": "Send Invoice Email",
+    "invoiceId": "inv_10042",
+    "recipient": "billing@acmepayments.dev"
   },
-  "maxAttempts": 3
+  "maxAttempts": 5
 }
 ```
 
-Delayed job body adds:
+Delayed jobs add `delaySeconds`. Scheduled jobs add an ISO 8601
+`scheduledFor`. Recurring definitions include `name`, `cronExpression`,
+`timezone`, `payload`, and `nextRunAt`.
 
-```json
-{
-  "delaySeconds": 300
-}
-```
-
-Recurring job body:
-
-```json
-{
-  "projectId": "project_id",
-  "queueId": "queue_id",
-  "name": "Daily settlement",
-  "cronExpression": "0 2 * * *",
-  "timezone": "UTC",
-  "payload": {
-    "task": "settlement"
-  },
-  "nextRunAt": "2026-07-03T02:00:00.000Z"
-}
-```
+Batch creation accepts common queue/retry settings and a `jobs` array with up
+to 1,000 payloads.
 
 ## Workers
 
@@ -127,9 +167,51 @@ Recurring job body:
 - `POST /api/workers/executions/fail`
 - `POST /api/workers/recover`
 
-Claiming uses a single PostgreSQL transaction with `FOR UPDATE SKIP LOCKED`.
+Register worker:
+
+```json
+{
+  "projectId": "project_id",
+  "queueId": "queue_id",
+  "name": "payments-worker-01",
+  "hostname": "worker-01.internal",
+  "concurrency": 8,
+  "metadata": {
+    "region": "local"
+  }
+}
+```
+
+A successful claim returns the job and execution attempt. No eligible work
+returns HTTP `204`. Queue selection, concurrency validation, job locking,
+assignment, state transition, and execution creation run in one PostgreSQL
+transaction.
 
 ## Dead Letter Queue
 
-- `GET /api/dead-letter` - list DLQ entries
-- `POST /api/jobs/:jobId/retry` - remove from DLQ and requeue
+- `GET /api/dead-letter`
+- `POST /api/jobs/:jobId/retry`
+
+Manual retry removes the DLQ entry and returns the job to an eligible state.
+
+## Health and metrics
+
+- `GET /health`
+- `GET /metrics`
+- `GET /metrics/overview`
+
+Health includes API uptime, PostgreSQL and Redis connectivity, dependency
+latency, and worker counts. Prometheus metrics cover queue depth, jobs by
+state, workers by status, execution outcomes, and DLQ size.
+
+## Current API limitations
+
+List endpoints return bounded assignment-scale datasets and do not yet expose
+uniform pagination, filtering, or sorting parameters. Authentication is
+implemented, but scheduler routes do not yet enforce organization membership
+on every request. These are documented production follow-ups rather than
+hidden behind incomplete middleware.
+
+---
+
+[GitHub Repository](https://github.com/SujalP21/Distributed-job-scheduler)

@@ -1,53 +1,59 @@
-# Deployment Guide
+# Deployment
 
-## Local Docker
+## Docker Compose
 
 ```bash
-cp .env.example .env
-docker compose up --build
+git clone https://github.com/SujalP21/Distributed-job-scheduler.git
+cd Distributed-job-scheduler
+docker compose up --build -d
 ```
 
-Services:
+Compose reads the checked-in `.env.example` development defaults. Replace the example credentials through environment overrides or a secret manager outside local development.
 
-- Backend: `http://localhost:4000`
+Verify:
+
+```bash
+docker compose ps
+curl http://localhost:4000/health
+```
+
 - Frontend: `http://localhost:5173`
-- Postgres: `localhost:5432`
-- Redis: `localhost:6379`
+- Backend: `http://localhost:4000`
 
-## Database
+## Database Initialization
 
-Run migrations and seed data from `backend/`:
-
-```bash
-npm install
-npx prisma migrate dev
-npx prisma db seed
-```
-
-For production:
+For a fresh environment, run migrations and seed data:
 
 ```bash
-npx prisma migrate deploy
+npx prisma migrate deploy --schema backend/prisma/schema.prisma
+npm run db:seed --prefix backend
 ```
 
-## Environment Variables
+For production, migrations should run as a separate release step before API instances receive traffic.
 
-- `DATABASE_URL`
-- `REDIS_URL`
-- `JWT_ACCESS_SECRET`
-- `JWT_ACCESS_EXPIRES_IN`
-- `REFRESH_TOKEN_DAYS`
-- `BCRYPT_SALT_ROUNDS`
-- `CORS_ORIGIN`
-- `LOG_LEVEL`
+## Secrets
 
-Use a long random `JWT_ACCESS_SECRET` in production.
+Replace all example credentials. Store database, Redis, and JWT secrets in a platform secret manager. Do not use `.env.example` as a production secret source.
 
-## Production Notes
+## Production Recommendations
 
-- Run at least two backend replicas behind a load balancer.
-- Keep Postgres as the source of truth for job claiming.
-- Use Redis for future cache/rate-limit enhancements, not correctness-critical locks.
-- Configure log collection for JSON stdout.
-- Scrape `/metrics` with Prometheus.
-- Alert on `/health` degraded responses, stale workers, retry spikes, and DLQ growth.
+- managed PostgreSQL with backups and connection limits
+- managed Redis if caching/coordination is enabled
+- TLS termination and restricted CORS
+- health/readiness probes
+- multiple API instances
+- worker autoscaling based on queue depth
+- Prometheus/Grafana and centralized logs
+- retention/partitioning for logs, heartbeats, and executions
+
+## Shutdown
+
+```bash
+docker compose down
+```
+
+Add `-v` only when intentionally deleting local database data.
+
+---
+
+[GitHub Repository](https://github.com/SujalP21/Distributed-job-scheduler)

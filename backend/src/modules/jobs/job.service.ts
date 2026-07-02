@@ -54,13 +54,17 @@ export class JobService {
   }
 
   async createImmediateJob(input: ImmediateJobInput) {
-    const queue = await this.getQueueOrThrow(input.queueId);
+    const { retryPolicyId } = await this.validateJobScope(
+      input.projectId,
+      input.queueId,
+      input.retryPolicyId
+    );
 
     return this.db.job.create({
       data: {
         projectId: input.projectId,
         queueId: input.queueId,
-        retryPolicyId: input.retryPolicyId ?? queue.retryPolicyId,
+        retryPolicyId,
         createdById: input.createdById,
         type: JobType.IMMEDIATE,
         state: JobState.QUEUED,
@@ -73,13 +77,17 @@ export class JobService {
 
   async createDelayedJob(input: DelayedJobInput) {
     const scheduledFor = new Date(Date.now() + input.delaySeconds * 1000);
-    const queue = await this.getQueueOrThrow(input.queueId);
+    const { retryPolicyId } = await this.validateJobScope(
+      input.projectId,
+      input.queueId,
+      input.retryPolicyId
+    );
 
     return this.db.job.create({
       data: {
         projectId: input.projectId,
         queueId: input.queueId,
-        retryPolicyId: input.retryPolicyId ?? queue.retryPolicyId,
+        retryPolicyId,
         createdById: input.createdById,
         type: JobType.DELAYED,
         state: JobState.SCHEDULED,
@@ -94,13 +102,17 @@ export class JobService {
 
   async createScheduledJob(input: ScheduledJobInput) {
     const scheduledFor = new Date(input.scheduledFor);
-    const queue = await this.getQueueOrThrow(input.queueId);
+    const { retryPolicyId } = await this.validateJobScope(
+      input.projectId,
+      input.queueId,
+      input.retryPolicyId
+    );
 
     return this.db.job.create({
       data: {
         projectId: input.projectId,
         queueId: input.queueId,
-        retryPolicyId: input.retryPolicyId ?? queue.retryPolicyId,
+        retryPolicyId,
         createdById: input.createdById,
         type: JobType.SCHEDULED,
         state: JobState.SCHEDULED,
@@ -114,13 +126,17 @@ export class JobService {
   }
 
   async createRecurringJob(input: RecurringJobInput) {
-    const queue = await this.getQueueOrThrow(input.queueId);
+    const { retryPolicyId } = await this.validateJobScope(
+      input.projectId,
+      input.queueId,
+      input.retryPolicyId
+    );
 
     return this.db.scheduledJob.create({
       data: {
         projectId: input.projectId,
         queueId: input.queueId,
-        retryPolicyId: input.retryPolicyId ?? queue.retryPolicyId,
+        retryPolicyId,
         name: input.name,
         jobType: JobType.RECURRING,
         cronExpression: input.cronExpression,
@@ -133,14 +149,18 @@ export class JobService {
   }
 
   async createBatchJob(input: BatchJobInput) {
-    const queue = await this.getQueueOrThrow(input.queueId);
+    const { retryPolicyId } = await this.validateJobScope(
+      input.projectId,
+      input.queueId,
+      input.retryPolicyId
+    );
     const batchId = input.batchId ?? `batch_${randomUUID()}`;
 
     await this.db.job.createMany({
       data: input.jobs.map((payload) => ({
         projectId: input.projectId,
         queueId: input.queueId,
-        retryPolicyId: input.retryPolicyId ?? queue.retryPolicyId,
+        retryPolicyId,
         createdById: input.createdById,
         batchId,
         type: JobType.BATCH,
@@ -237,7 +257,20 @@ export class JobService {
     return job;
   }
 
-  private async getQueueOrThrow(queueId: string) {
+  private async validateJobScope(projectId: string, queueId: string, retryPolicyId?: string) {
+    const queue = await this.getQueueOrThrow(queueId, projectId);
+
+    if (retryPolicyId) {
+      await this.getRetryPolicyOrThrow(retryPolicyId, projectId);
+    }
+
+    return {
+      queue,
+      retryPolicyId: retryPolicyId ?? queue.retryPolicyId
+    };
+  }
+
+  private async getQueueOrThrow(queueId: string, projectId: string) {
     const queue = await this.db.queue.findUnique({
       where: { id: queueId }
     });
@@ -246,6 +279,30 @@ export class JobService {
       throw new AppError(404, "QUEUE_NOT_FOUND", "Queue was not found");
     }
 
+    if (queue.projectId !== projectId) {
+      throw new AppError(400, "QUEUE_PROJECT_MISMATCH", "Queue does not belong to the project");
+    }
+
     return queue;
+  }
+
+  private async getRetryPolicyOrThrow(retryPolicyId: string, projectId: string) {
+    const retryPolicy = await this.db.retryPolicy.findUnique({
+      where: { id: retryPolicyId }
+    });
+
+    if (!retryPolicy) {
+      throw new AppError(404, "RETRY_POLICY_NOT_FOUND", "Retry policy was not found");
+    }
+
+    if (retryPolicy.projectId !== projectId) {
+      throw new AppError(
+        400,
+        "RETRY_POLICY_PROJECT_MISMATCH",
+        "Retry policy does not belong to the project"
+      );
+    }
+
+    return retryPolicy;
   }
 }

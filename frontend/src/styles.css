@@ -6,63 +6,211 @@ body,
 }
 
 body {
-  background: #f7f9fc;
+  background: #f6f7f9;
 }
 
-.app-shell {
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.center-screen,
+.auth-shell {
   min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(246, 247, 249, 0.96)),
+    radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.14), transparent 32%);
+}
+
+.auth-panel {
+  width: min(480px, calc(100vw - 32px));
+  padding: 32px;
+}
+
+.app-layout {
+  min-height: 100vh;
+  display: flex;
+  background: #f6f7f9;
+}
+
+.workspace {
+  flex: 1;
+  min-width: 0;
+}
+
+.appbar {
+  border-bottom: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
 }
 
 .topbar {
   justify-content: space-between;
-  border-bottom: 1px solid #dfe5ef;
-  background: rgba(255, 255, 255, 0.92);
+  gap: 16px;
 }
 
-.main-content {
-  padding-top: 48px;
-  padding-bottom: 48px;
+.brand-panel {
+  padding: 22px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.metric-card,
-.stat-card {
-  padding: 20px;
-  height: 100%;
-}
-
-.metric-icon,
-.stat-icon {
+.brand-mark {
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  color: #146ef5;
-  background: #e8f0ff;
+  color: #ffffff;
+  background: #111827;
   border-radius: 8px;
 }
 
-.status-panel {
-  padding: 24px;
+.brand-mark.large {
+  width: 48px;
+  height: 48px;
 }
 
-.panel {
+.nav-list {
+  padding: 10px;
+}
+
+.nav-list .MuiListItemButton-root {
+  min-height: 40px;
+  border-radius: 8px;
+  margin-bottom: 3px;
+}
+
+.nav-list .MuiListItemIcon-root {
+  min-width: 36px;
+  color: #6b7280;
+}
+
+.nav-list .Mui-selected {
+  background: #eef2ff;
+}
+
+.content {
+  padding: 28px;
+}
+
+.project-select {
+  min-width: 280px;
+}
+
+.top-progress {
+  width: 140px;
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  background: #111827;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.panel,
+.stat-card {
   padding: 20px;
+  border-color: #e5e7eb;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.stat-card {
   height: 100%;
 }
 
-.row-card {
+.stat-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.empty-state {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 24px;
+  border: 1px dashed #d1d5db;
+  background: #fbfcfe;
+  border-radius: 8px;
+}
+
+.row-button {
+  width: 100%;
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid #edf1f7;
+  padding: 12px;
+  text-align: left;
+  color: inherit;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.row-card:last-child {
-  border-bottom: 0;
+.row-button:hover {
+  border-color: #c7d2fe;
+  background: #f8faff;
 }
 
-.fit-chip {
-  align-self: flex-start;
+.metric-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.status-chip {
+  font-weight: 800;
+}
+
+.status-active,
+.status-online,
+.status-completed,
+.status-succeeded {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.status-queued,
+.status-claimed,
+.status-running {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.status-scheduled {
+  color: #6d28d9;
+  background: #f5f3ff;
+}
+
+.status-paused,
+.status-draining,
+.status-retrying {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+.status-archived,
+.status-offline,
+.status-failed,
+.status-dead_letter,
+.status-max_retries_exceeded {
+  color: #b91c1c;
+  background: #fef2f2;
 }

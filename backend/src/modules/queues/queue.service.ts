@@ -29,7 +29,11 @@ export class QueueService {
     });
   }
 
-  createQueue(input: CreateQueueInput) {
+  async createQueue(input: CreateQueueInput) {
+    if (input.retryPolicyId) {
+      await this.ensureRetryPolicy(input.retryPolicyId, input.projectId);
+    }
+
     return this.db.queue.create({
       data: {
         ...input,
@@ -39,7 +43,11 @@ export class QueueService {
   }
 
   async updateQueue(queueId: string, input: UpdateQueueInput) {
-    await this.ensureQueue(queueId);
+    const queue = await this.ensureQueue(queueId);
+
+    if (input.retryPolicyId) {
+      await this.ensureRetryPolicy(input.retryPolicyId, queue.projectId);
+    }
 
     return this.db.queue.update({
       where: { id: queueId },
@@ -102,10 +110,30 @@ export class QueueService {
       where: { id: queueId }
     });
 
-    if (!queue) {
+    if (!queue || queue.deletedAt) {
       throw new AppError(404, "QUEUE_NOT_FOUND", "Queue was not found");
     }
 
     return queue;
+  }
+
+  private async ensureRetryPolicy(retryPolicyId: string, projectId: string) {
+    const retryPolicy = await this.db.retryPolicy.findUnique({
+      where: { id: retryPolicyId }
+    });
+
+    if (!retryPolicy) {
+      throw new AppError(404, "RETRY_POLICY_NOT_FOUND", "Retry policy was not found");
+    }
+
+    if (retryPolicy.projectId !== projectId) {
+      throw new AppError(
+        400,
+        "RETRY_POLICY_PROJECT_MISMATCH",
+        "Retry policy does not belong to the project"
+      );
+    }
+
+    return retryPolicy;
   }
 }
