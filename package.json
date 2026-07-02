@@ -1,0 +1,33 @@
+{
+  "name": "distributed-job-scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-inspired distributed job scheduler platform.",
+  "scripts": {
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "test": "npm test --prefix backend",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2"
+  },
+  "lint-staged": {
+    "*.{json,md,css,yml,yaml}": "prettier --write",
+    "backend/**/*.{ts,js,cjs}": [
+      "prettier --write",
+      "npm run lint --prefix backend"
+    ],
+    "frontend/**/*.{ts,tsx,js,cjs}": [
+      "prettier --write",
+      "npm run lint --prefix frontend"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+.git
+backend/generated
+frontend/dist
+package-lock.json

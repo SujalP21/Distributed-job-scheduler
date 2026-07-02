@@ -1,0 +1,44 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f7f9fc;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  justify-content: space-between;
+  border-bottom: 1px solid #dfe5ef;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.main-content {
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+
+.metric-card {
+  padding: 20px;
+  height: 100%;
+}
+
+.metric-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #146ef5;
+  background: #e8f0ff;
+  border-radius: 8px;
+}
+
+.status-panel {
+  padding: 24px;
+}
