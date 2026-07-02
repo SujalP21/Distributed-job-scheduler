@@ -1,6 +1,7 @@
 import { DeadLetterReason, ExecutionStatus, JobState, Prisma, RetryStrategy } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { AppError } from "@/common/errors/app-error";
+import { logger } from "@/config/logger";
 import { prisma } from "@/config/prisma";
 
 export type RetryDecision = {
@@ -165,8 +166,72 @@ export class RetryService {
           }
         });
 
+        await tx.jobLog.create({
+          data: {
+            jobId: job.id,
+            executionId: execution.id,
+            level: "ERROR",
+            message: "Job moved to dead letter queue",
+            metadata: {
+              errorMessage: input.errorMessage,
+              attempts: job.attempts,
+              maxAttempts: job.maxAttempts
+            }
+          }
+        });
+
+        logger.error("job_moved_to_dead_letter", {
+          job: {
+            id: job.id,
+            queueId: job.queueId,
+            attempts: job.attempts,
+            maxAttempts: job.maxAttempts
+          },
+          execution: {
+            id: execution.id
+          },
+          error: {
+            message: input.errorMessage
+          }
+        });
+
         return failedJob;
       }
+
+      await tx.jobLog.create({
+        data: {
+          jobId: job.id,
+          executionId: execution.id,
+          level: "WARN",
+          message: "Job execution failed; retry scheduled",
+          metadata: {
+            errorMessage: input.errorMessage,
+            attempts: job.attempts,
+            maxAttempts: job.maxAttempts,
+            retryDelaySeconds: retry.delaySeconds,
+            nextAvailableAt: retry.nextAvailableAt.toISOString()
+          }
+        }
+      });
+
+      logger.warn("job_retry_scheduled", {
+        job: {
+          id: job.id,
+          queueId: job.queueId,
+          attempts: job.attempts,
+          maxAttempts: job.maxAttempts
+        },
+        execution: {
+          id: execution.id
+        },
+        retry: {
+          delaySeconds: retry.delaySeconds,
+          nextAvailableAt: retry.nextAvailableAt.toISOString()
+        },
+        error: {
+          message: input.errorMessage
+        }
+      });
 
       return tx.job.update({
         where: { id: job.id },

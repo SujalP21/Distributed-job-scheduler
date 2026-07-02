@@ -28,6 +28,31 @@ export class JobService {
     this.retryService = new RetryService(db);
   }
 
+  listJobs() {
+    return this.db.job.findMany({
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 100,
+      include: {
+        queue: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
+          }
+        },
+        claimedByWorker: {
+          select: {
+            id: true,
+            name: true,
+            status: true
+          }
+        }
+      }
+    });
+  }
+
   async createImmediateJob(input: ImmediateJobInput) {
     const queue = await this.getQueueOrThrow(input.queueId);
 

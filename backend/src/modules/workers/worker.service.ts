@@ -36,7 +36,39 @@ export class WorkerService {
     this.retryService = new RetryService(db);
   }
 
+  listWorkers() {
+    return this.db.worker.findMany({
+      orderBy: {
+        registeredAt: "desc"
+      },
+      include: {
+        queue: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
+          }
+        },
+        _count: {
+          select: {
+            executions: true,
+            heartbeats: true
+          }
+        }
+      }
+    });
+  }
+
   registerWorker(input: RegisterWorkerInput) {
+    logger.info("worker_registering", {
+      worker: {
+        projectId: input.projectId,
+        queueId: input.queueId,
+        name: input.name,
+        concurrency: input.concurrency
+      }
+    });
+
     return this.db.worker.create({
       data: {
         projectId: input.projectId,
@@ -69,6 +101,14 @@ export class WorkerService {
           capacity: input.capacity,
           heartbeatAt: new Date(),
           metadata: input.metadata as Prisma.InputJsonValue
+        }
+      });
+
+      logger.debug("worker_heartbeat_recorded", {
+        worker: {
+          id: workerId,
+          activeJobs: input.activeJobs,
+          capacity: input.capacity
         }
       });
 
@@ -150,6 +190,37 @@ export class WorkerService {
           where: { id: claimed.id }
         });
 
+        await tx.jobLog.create({
+          data: {
+            jobId: job.id,
+            executionId: execution.id,
+            level: "INFO",
+            message: "Job claimed by worker",
+            metadata: {
+              workerId,
+              attempt: claimed.attempts,
+              queueId: job.queueId,
+              priority: job.priority
+            }
+          }
+        });
+
+        logger.info("job_claimed", {
+          worker: {
+            id: workerId
+          },
+          job: {
+            id: job.id,
+            queueId: job.queueId,
+            state: job.state,
+            attempt: claimed.attempts,
+            priority: job.priority
+          },
+          execution: {
+            id: execution.id
+          }
+        });
+
         return {
           job,
           execution
@@ -175,6 +246,24 @@ export class WorkerService {
         where: { id: input.jobId },
         data: {
           state: JobState.RUNNING
+        }
+      });
+
+      await tx.jobLog.create({
+        data: {
+          jobId: input.jobId,
+          executionId: input.executionId,
+          level: "INFO",
+          message: "Job execution started"
+        }
+      });
+
+      logger.info("job_execution_started", {
+        job: {
+          id: input.jobId
+        },
+        execution: {
+          id: input.executionId
         }
       });
 
@@ -209,6 +298,28 @@ export class WorkerService {
         }
       });
 
+      await tx.jobLog.create({
+        data: {
+          jobId: input.jobId,
+          executionId: input.executionId,
+          level: "INFO",
+          message: "Job execution completed",
+          metadata: {
+            durationMs
+          }
+        }
+      });
+
+      logger.info("job_execution_completed", {
+        job: {
+          id: input.jobId
+        },
+        execution: {
+          id: input.executionId,
+          durationMs
+        }
+      });
+
       return tx.job.update({
         where: { id: input.jobId },
         data: {
@@ -228,6 +339,12 @@ export class WorkerService {
   }
 
   async gracefulShutdown(workerId: string) {
+    logger.info("worker_graceful_shutdown_requested", {
+      worker: {
+        id: workerId
+      }
+    });
+
     return this.db.worker.update({
       where: { id: workerId },
       data: {
@@ -240,22 +357,58 @@ export class WorkerService {
   async recoverAbandonedJobs(input: RecoverAbandonedJobsInput) {
     const cutoff = new Date(Date.now() - input.olderThanSeconds * 1000);
 
-    return this.db.job.updateMany({
-      where: {
-        state: {
-          in: [JobState.CLAIMED, JobState.RUNNING]
-        },
-        lockedAt: {
-          lt: cutoff
+    return this.db.$transaction(async (tx) => {
+      const abandonedJobs = await tx.job.findMany({
+        where: {
+          state: {
+            in: [JobState.CLAIMED, JobState.RUNNING]
+          },
+          lockedAt: {
+            lt: cutoff
+          }
         }
-      },
-      data: {
-        state: JobState.RETRYING,
-        availableAt: new Date(),
-        claimedByWorkerId: null,
-        lockedAt: null,
-        errorMessage: "Recovered from abandoned worker claim"
+      });
+
+      const result = await tx.job.updateMany({
+        where: {
+          id: {
+            in: abandonedJobs.map((job) => job.id)
+          }
+        },
+        data: {
+          state: JobState.RETRYING,
+          availableAt: new Date(),
+          claimedByWorkerId: null,
+          lockedAt: null,
+          errorMessage: "Recovered from abandoned worker claim"
+        }
+      });
+
+      if (abandonedJobs.length > 0) {
+        await tx.jobLog.createMany({
+          data: abandonedJobs.map((job) => ({
+            jobId: job.id,
+            level: "WARN",
+            message: "Job recovered from abandoned worker claim",
+            metadata: {
+              previousWorkerId: job.claimedByWorkerId,
+              lockedAt: job.lockedAt?.toISOString() ?? null,
+              olderThanSeconds: input.olderThanSeconds
+            }
+          }))
+        });
       }
+
+      logger.warn("abandoned_jobs_recovered", {
+        jobs: {
+          count: result.count
+        },
+        recovery: {
+          olderThanSeconds: input.olderThanSeconds
+        }
+      });
+
+      return result;
     });
   }
 }

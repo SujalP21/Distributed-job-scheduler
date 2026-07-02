@@ -15,6 +15,12 @@ export type HealthReport = {
     api: DependencyHealth;
     postgres: DependencyHealth;
     redis: DependencyHealth;
+    workers: DependencyHealth & {
+      online: number;
+      draining: number;
+      offline: number;
+      staleOnline: number;
+    };
   };
 };
 
@@ -37,7 +43,7 @@ const timed = async (check: () => Promise<void>): Promise<DependencyHealth> => {
 };
 
 export const getHealthReport = async (): Promise<HealthReport> => {
-  const [postgres, redisHealth] = await Promise.all([
+  const [postgres, redisHealth, workerHealth] = await Promise.all([
     timed(async () => {
       await prisma.$queryRaw`SELECT 1`;
     }),
@@ -46,10 +52,41 @@ export const getHealthReport = async (): Promise<HealthReport> => {
         await redis.connect();
       }
       await redis.ping();
+    }),
+    timed(async () => {
+      await prisma.worker.count();
     })
   ]);
 
-  const status = postgres.status === "ok" && redisHealth.status === "ok" ? "ok" : "degraded";
+  const [workerGroups, staleOnlineWorkers] =
+    workerHealth.status === "ok"
+      ? await Promise.all([
+          prisma.worker.groupBy({
+            by: ["status"],
+            _count: { _all: true }
+          }),
+          prisma.worker.count({
+            where: {
+              status: "ONLINE",
+              lastHeartbeatAt: {
+                lt: new Date(Date.now() - 15_000)
+              }
+            }
+          })
+        ])
+      : [[], 0];
+
+  const workerStatus = {
+    online: workerGroups.find((item) => item.status === "ONLINE")?._count._all ?? 0,
+    draining: workerGroups.find((item) => item.status === "DRAINING")?._count._all ?? 0,
+    offline: workerGroups.find((item) => item.status === "OFFLINE")?._count._all ?? 0,
+    staleOnline: staleOnlineWorkers
+  };
+
+  const status =
+    postgres.status === "ok" && redisHealth.status === "ok" && workerHealth.status === "ok"
+      ? "ok"
+      : "degraded";
 
   return {
     status,
@@ -61,7 +98,11 @@ export const getHealthReport = async (): Promise<HealthReport> => {
         latencyMs: 0
       },
       postgres,
-      redis: redisHealth
+      redis: redisHealth,
+      workers: {
+        ...workerHealth,
+        ...workerStatus
+      }
     }
   };
 };

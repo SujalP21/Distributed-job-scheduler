@@ -12,7 +12,16 @@ const line = (name: string, value: number, labels?: Record<string, string | numb
 };
 
 export const getPrometheusMetrics = async () => {
-  const [jobCounts, queueCounts, workerCounts, activeExecutions, dlqCount] = await Promise.all([
+  const [
+    jobCounts,
+    queueCounts,
+    workerCounts,
+    activeExecutions,
+    dlqCount,
+    queues,
+    queueJobCounts,
+    queueWorkerCounts
+  ] = await Promise.all([
     prisma.job.groupBy({
       by: ["state"],
       _count: { _all: true }
@@ -32,7 +41,23 @@ export const getPrometheusMetrics = async () => {
         }
       }
     }),
-    prisma.deadLetterQueue.count()
+    prisma.deadLetterQueue.count(),
+    prisma.queue.findMany({
+      select: {
+        id: true,
+        slug: true,
+        projectId: true,
+        concurrencyLimit: true
+      }
+    }),
+    prisma.job.groupBy({
+      by: ["queueId", "state"],
+      _count: { _all: true }
+    }),
+    prisma.worker.groupBy({
+      by: ["queueId", "status"],
+      _count: { _all: true }
+    })
   ]);
 
   const output = [
@@ -73,7 +98,50 @@ export const getPrometheusMetrics = async () => {
     line("scheduler_active_executions", activeExecutions),
     "# HELP scheduler_dead_letter_jobs_total Dead letter queue entries.",
     "# TYPE scheduler_dead_letter_jobs_total gauge",
-    line("scheduler_dead_letter_jobs_total", dlqCount)
+    line("scheduler_dead_letter_jobs_total", dlqCount),
+    "# HELP scheduler_queue_depth Jobs by queue and state.",
+    "# TYPE scheduler_queue_depth gauge",
+    ...queues.flatMap((queue) =>
+      Object.values(JobState).map((state) =>
+        line(
+          "scheduler_queue_depth",
+          queueJobCounts.find((item) => item.queueId === queue.id && item.state === state)?._count
+            ._all ?? 0,
+          {
+            queue_id: queue.id,
+            queue_slug: queue.slug,
+            project_id: queue.projectId,
+            state
+          }
+        )
+      )
+    ),
+    "# HELP scheduler_queue_concurrency_limit Configured queue concurrency limit.",
+    "# TYPE scheduler_queue_concurrency_limit gauge",
+    ...queues.map((queue) =>
+      line("scheduler_queue_concurrency_limit", queue.concurrencyLimit, {
+        queue_id: queue.id,
+        queue_slug: queue.slug,
+        project_id: queue.projectId
+      })
+    ),
+    "# HELP scheduler_queue_workers_total Workers by queue and status.",
+    "# TYPE scheduler_queue_workers_total gauge",
+    ...queues.flatMap((queue) =>
+      Object.values(WorkerStatus).map((status) =>
+        line(
+          "scheduler_queue_workers_total",
+          queueWorkerCounts.find((item) => item.queueId === queue.id && item.status === status)
+            ?._count._all ?? 0,
+          {
+            queue_id: queue.id,
+            queue_slug: queue.slug,
+            project_id: queue.projectId,
+            status
+          }
+        )
+      )
+    )
   ];
 
   return `${output.join("\n")}\n`;

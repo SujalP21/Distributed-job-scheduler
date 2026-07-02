@@ -24,12 +24,14 @@ body {
   padding-bottom: 48px;
 }
 
-.metric-card {
+.metric-card,
+.stat-card {
   padding: 20px;
   height: 100%;
 }
 
-.metric-icon {
+.metric-icon,
+.stat-icon {
   display: grid;
   place-items: center;
   width: 44px;
@@ -41,4 +43,26 @@ body {
 
 .status-panel {
   padding: 24px;
+}
+
+.panel {
+  padding: 20px;
+  height: 100%;
+}
+
+.row-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.row-card:last-child {
+  border-bottom: 0;
+}
+
+.fit-chip {
+  align-self: flex-start;
 }

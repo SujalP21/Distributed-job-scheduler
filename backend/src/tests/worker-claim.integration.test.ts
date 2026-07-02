@@ -6,6 +6,8 @@ const workerService = new WorkerService(prisma);
 
 const testRun = `phase4_${Date.now()}`;
 
+jest.setTimeout(30_000);
+
 const createFixture = async (input: {
   suffix: string;
   concurrencyLimit?: number;

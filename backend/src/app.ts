@@ -8,10 +8,12 @@ import { env } from "@/config/env";
 import { logger } from "@/config/logger";
 import { createAuthRouter } from "@/modules/auth/auth.routes";
 import type { AuthService } from "@/modules/auth/auth.service";
+import { createDeadLetterRouter } from "@/modules/dead-letter/dead-letter.routes";
 import { healthRouter } from "@/modules/health/health.routes";
 import { createJobRouter } from "@/modules/jobs/job.routes";
 import { metricsRouter } from "@/modules/metrics/metrics.routes";
 import { organizationsRouter } from "@/modules/organizations/organizations.routes";
+import { createProjectRouter } from "@/modules/projects/project.routes";
 import { createQueueRouter } from "@/modules/queues/queue.routes";
 import { createWorkerRouter } from "@/modules/workers/worker.routes";
 
@@ -51,9 +53,11 @@ export const createApp = (dependencies: AppDependencies = {}) => {
   app.use("/metrics", metricsRouter);
   app.use("/api/auth", createAuthRouter(dependencies.authService));
   app.use("/api/organizations", organizationsRouter);
+  app.use("/api/projects", createProjectRouter());
   app.use("/api/queues", createQueueRouter());
   app.use("/api/jobs", createJobRouter());
   app.use("/api/workers", createWorkerRouter());
+  app.use("/api/dead-letter", createDeadLetterRouter());
 
   app.use(notFoundHandler);
   app.use(errorHandler);

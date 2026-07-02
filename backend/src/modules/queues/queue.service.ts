@@ -11,6 +11,24 @@ type UpdateQueueInput = z.infer<typeof updateQueueSchema>;
 export class QueueService {
   constructor(private readonly db: PrismaClient = prisma) {}
 
+  listQueues() {
+    return this.db.queue.findMany({
+      where: {
+        deletedAt: null
+      },
+      orderBy: [{ priorityWeight: "desc" }, { createdAt: "asc" }],
+      include: {
+        retryPolicy: true,
+        _count: {
+          select: {
+            jobs: true,
+            workers: true
+          }
+        }
+      }
+    });
+  }
+
   createQueue(input: CreateQueueInput) {
     return this.db.queue.create({
       data: {

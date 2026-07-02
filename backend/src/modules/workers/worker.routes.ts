@@ -12,6 +12,14 @@ import { WorkerService } from "./worker.service";
 export const createWorkerRouter = (service = new WorkerService()) => {
   const router = Router();
 
+  router.get("/", async (_req, res, next) => {
+    try {
+      res.json(await service.listWorkers());
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/register", validateBody(registerWorkerSchema), async (req, res, next) => {
     try {
       res.status(201).json(await service.registerWorker(req.body));

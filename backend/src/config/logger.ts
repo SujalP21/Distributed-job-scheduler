@@ -15,6 +15,7 @@ const withRequestContext = winston.format((info) => {
 
 export const logger = winston.createLogger({
   level: env.LOG_LEVEL,
+  silent: env.NODE_ENV === "test",
   defaultMeta: {
     service: "scheduler-api"
   },

@@ -6,6 +6,14 @@ import { QueueService } from "./queue.service";
 export const createQueueRouter = (service = new QueueService()) => {
   const router = Router();
 
+  router.get("/", async (_req, res, next) => {
+    try {
+      res.json(await service.listQueues());
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/", validateBody(createQueueSchema), async (req, res, next) => {
     try {
       res.status(201).json(await service.createQueue(req.body));

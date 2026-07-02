@@ -12,6 +12,14 @@ import { JobService } from "./job.service";
 export const createJobRouter = (service = new JobService()) => {
   const router = Router();
 
+  router.get("/", async (_req, res, next) => {
+    try {
+      res.json(await service.listJobs());
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/immediate", validateBody(immediateJobSchema), async (req, res, next) => {
     try {
       res.status(201).json(await service.createImmediateJob(req.body));
